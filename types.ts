@@ -64,3 +64,8 @@ export interface AppSettings {
   exportQuality: '1080p' | '4k';
   showWatermark: boolean;
 }
+
+export interface AnalyzedFrame {
+  time: number;
+  data: string; // base64
+}

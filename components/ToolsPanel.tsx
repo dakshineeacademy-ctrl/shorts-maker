@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { CaptionStyle, Clip, VideoMetadata, Template, AudioTrack, AppSettings } from '../types';
+import { CaptionStyle, Clip, VideoMetadata, Template, AudioTrack, AppSettings, CaptionSegment } from '../types';
 import { CAPTION_STYLES, TEMPLATES, AUDIO_TRACKS } from '../constants';
-import { Wand2, Play, AlertCircle, Sparkles, Clock, UploadCloud, Check, Layout, Music, Settings as SettingsIcon, Volume2 } from 'lucide-react';
+import { Wand2, Play, AlertCircle, Sparkles, Clock, UploadCloud, Check, Layout, Music, Settings as SettingsIcon, Volume2, Type } from 'lucide-react';
 
 interface ToolsPanelProps {
   activeTab: string;
@@ -26,6 +26,9 @@ interface ToolsPanelProps {
   onSelectAudio?: (id: string) => void;
   settings?: AppSettings;
   onSettingsChange?: (settings: AppSettings) => void;
+  captions?: CaptionSegment[];
+  onGenerateCaptions?: () => void;
+  isGeneratingCaptions?: boolean;
 }
 
 const ToolsPanel: React.FC<ToolsPanelProps> = ({ 
@@ -50,7 +53,10 @@ const ToolsPanel: React.FC<ToolsPanelProps> = ({
   selectedAudioId,
   onSelectAudio,
   settings,
-  onSettingsChange
+  onSettingsChange,
+  captions = [],
+  onGenerateCaptions,
+  isGeneratingCaptions = false
 }) => {
   const [isDragging, setIsDragging] = useState(false);
 
@@ -184,7 +190,7 @@ const ToolsPanel: React.FC<ToolsPanelProps> = ({
               onClick={onGenerateAI}
               disabled={isAnalyzing || !metadata}
               className={`w-full py-4 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all ${
-                isAnalyzing 
+                isAnalyzing || !metadata
                 ? 'bg-slate-800 text-slate-400 cursor-not-allowed'
                 : 'bg-gradient-to-r from-fuchsia-600 to-violet-600 hover:from-fuchsia-500 hover:to-violet-500 text-white shadow-lg shadow-fuchsia-900/30 active:scale-[0.98]'
               }`}
@@ -258,37 +264,78 @@ const ToolsPanel: React.FC<ToolsPanelProps> = ({
 
   if (activeTab === 'styles') {
     return (
-      <div className="p-6 space-y-6">
-        <h2 className="text-lg font-bold text-white mb-4">Caption Styles</h2>
-        <div className="grid grid-cols-1 gap-3">
-          {CAPTION_STYLES.map((style) => (
-            <button
-              key={style.id}
-              onClick={() => onSelectStyle(style.id)}
-              className={`relative p-4 rounded-xl border text-left transition-all overflow-hidden group ${
-                selectedStyleId === style.id
-                  ? 'bg-slate-800 border-violet-500 shadow-lg'
-                  : 'bg-slate-900/50 border-slate-800 hover:border-slate-600'
-              }`}
-            >
-              <div className="flex justify-between items-center mb-2 relative z-10">
-                <span className="text-sm text-slate-400 font-medium">{style.name}</span>
-                {selectedStyleId === style.id && <Check className="w-4 h-4 text-violet-500" />}
-              </div>
-              <div className={`text-xl ${style.cssClass} relative z-10 text-center py-2`}>
-                Preview Text
-              </div>
-              
-              {/* Glow Effect Background */}
-              {selectedStyleId === style.id && (
-                <div 
-                  className="absolute -right-4 -bottom-4 w-24 h-24 rounded-full blur-2xl opacity-20"
-                  style={{ backgroundColor: style.previewColor }} 
-                />
-              )}
-            </button>
-          ))}
+      <div className="p-6 space-y-6 flex flex-col h-full">
+        <h2 className="text-lg font-bold text-white mb-2">Captions</h2>
+        
+        {/* Generator */}
+        <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-fuchsia-500/10 rounded-lg">
+              <Type className="w-5 h-5 text-fuchsia-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-slate-200">Auto-Captions</h3>
+              <p className="text-xs text-slate-500">Generate subtitles from AI</p>
+            </div>
+          </div>
+          <button
+            onClick={onGenerateCaptions}
+            disabled={isGeneratingCaptions || !metadata}
+            className={`w-full py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all ${
+              isGeneratingCaptions || !metadata
+                ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                : 'bg-slate-700 hover:bg-slate-600 text-white'
+            }`}
+          >
+            {isGeneratingCaptions ? (
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <Wand2 className="w-4 h-4" />
+            )}
+            {captions.length > 0 ? 'Regenerate Captions' : 'Generate Captions'}
+          </button>
         </div>
+
+        {/* Styles Grid */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-slate-400 uppercase">Style Preset</h3>
+          <div className="grid grid-cols-2 gap-2">
+            {CAPTION_STYLES.map((style) => (
+              <button
+                key={style.id}
+                onClick={() => onSelectStyle(style.id)}
+                className={`relative p-3 rounded-lg border text-left transition-all overflow-hidden ${
+                  selectedStyleId === style.id
+                    ? 'bg-slate-800 border-violet-500 shadow-md'
+                    : 'bg-slate-900/30 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                <div className={`text-xs ${style.cssClass} text-center truncate`}>
+                  Aa
+                </div>
+                <div className="text-[10px] text-slate-500 mt-1 text-center">{style.name}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Caption List */}
+        {captions.length > 0 && (
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col mt-2">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase mb-2">Transcript</h3>
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+              {captions.map((cap) => (
+                <div key={cap.id} className="p-2 rounded bg-slate-900/50 border border-slate-800/50 text-xs hover:border-slate-700 transition-colors">
+                  <div className="flex justify-between text-[10px] text-slate-500 font-mono mb-1">
+                    <span>{cap.startTime.toFixed(1)}s</span>
+                    <span>{cap.endTime.toFixed(1)}s</span>
+                  </div>
+                  <div className="text-slate-300">{cap.text}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }

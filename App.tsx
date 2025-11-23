@@ -5,8 +5,8 @@ import ToolsPanel from './components/ToolsPanel';
 import VideoPlayer from './components/VideoPlayer';
 import Timeline from './components/Timeline';
 import TopBar from './components/TopBar';
-import { AppState, Clip, VideoMetadata, AspectRatio, AppSettings } from './types';
-import { generateViralClips, AnalyzedFrame } from './services/geminiService';
+import { AppState, Clip, VideoMetadata, AspectRatio, AppSettings, AnalyzedFrame, CaptionSegment } from './types';
+import { generateViralClips, generateCaptions } from './services/geminiService';
 import { CAPTION_STYLES, TEMPLATES, AUDIO_TRACKS } from './constants';
 import { Download, Share2 } from 'lucide-react';
 
@@ -24,6 +24,9 @@ const App = () => {
   
   // Editor State
   const [clips, setClips] = useState<Clip[]>([]);
+  const [frames, setFrames] = useState<AnalyzedFrame[]>([]);
+  const [captions, setCaptions] = useState<CaptionSegment[]>([]);
+  const [isGeneratingCaptions, setIsGeneratingCaptions] = useState(false);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(AspectRatio.PORTRAIT);
   const [selectedStyleId, setSelectedStyleId] = useState(CAPTION_STYLES[0].id);
@@ -64,6 +67,8 @@ const App = () => {
     setAppState(AppState.EDITING);
     // Reset state
     setClips([]);
+    setFrames([]);
+    setCaptions([]);
     setSelectedClipId(null);
     setActiveTab('media');
   };
@@ -101,7 +106,7 @@ const App = () => {
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    const frames: AnalyzedFrame[] = [];
+    const extractedFrames: AnalyzedFrame[] = [];
     const count = 9; // Increased for better AI context
     const interval = videoDuration / (count + 1);
 
@@ -126,7 +131,7 @@ const App = () => {
         canvas.height = video.videoHeight * scale;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         
-        frames.push({
+        extractedFrames.push({
           time,
           data: canvas.toDataURL('image/jpeg', 0.6).split(',')[1]
         });
@@ -135,7 +140,7 @@ const App = () => {
     
     // Cleanup
     video.src = "";
-    return frames;
+    return extractedFrames;
   };
 
   const handleGenerateAI = async () => {
@@ -145,15 +150,16 @@ const App = () => {
     setIsPlaying(false);
 
     try {
-      // 1. Extract frames
-      const frames = await extractFrames(videoSrc, duration);
+      // 1. Extract frames (or reuse if we want, but sticking to fresh extract for safety)
+      const extractedFrames = await extractFrames(videoSrc, duration);
+      setFrames(extractedFrames);
       
       // 2. Call Gemini
       const context = aiContext || `A video named ${metadata.name}. Identify the most engaging parts.`;
       const generatedClips = await generateViralClips(
         duration, 
         context, 
-        frames,
+        extractedFrames,
         minClipDuration,
         maxClipDuration
       );
@@ -171,6 +177,34 @@ const App = () => {
       console.error("Analysis failed", error);
     } finally {
       setAppState(AppState.EDITING);
+    }
+  };
+
+  const handleGenerateCaptions = async () => {
+    if (frames.length === 0) {
+      // If frames aren't ready, try to extract them first
+      if (!metadata || !videoSrc) return;
+      setIsGeneratingCaptions(true);
+      try {
+        const extractedFrames = await extractFrames(videoSrc, duration);
+        setFrames(extractedFrames);
+        const newCaptions = await generateCaptions(extractedFrames, duration);
+        setCaptions(newCaptions);
+      } catch (e) {
+        console.error("Caption gen failed", e);
+      } finally {
+        setIsGeneratingCaptions(false);
+      }
+    } else {
+      setIsGeneratingCaptions(true);
+      try {
+        const newCaptions = await generateCaptions(frames, duration);
+        setCaptions(newCaptions);
+      } catch (e) {
+        console.error("Caption gen failed", e);
+      } finally {
+        setIsGeneratingCaptions(false);
+      }
     }
   };
 
@@ -258,6 +292,9 @@ const App = () => {
           onSelectAudio={setSelectedAudioId}
           settings={settings}
           onSettingsChange={setSettings}
+          captions={captions}
+          onGenerateCaptions={handleGenerateCaptions}
+          isGeneratingCaptions={isGeneratingCaptions}
         />
       </div>
 
@@ -288,6 +325,7 @@ const App = () => {
           onUploadClick={handleUploadClick}
           onFileDrop={handleFileDrop}
           templateId={selectedTemplateId}
+          captions={captions}
         />
 
         {/* Timeline */}
@@ -300,6 +338,7 @@ const App = () => {
           }}
           clips={clips}
           selectedClipId={selectedClipId}
+          captions={captions}
         />
       </div>
     </Layout>

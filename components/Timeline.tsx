@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Clip } from '../types';
+import { Clip, CaptionSegment } from '../types';
 import { GripVertical } from 'lucide-react';
 
 interface TimelineProps {
@@ -8,9 +8,10 @@ interface TimelineProps {
   onSeek: (time: number) => void;
   clips: Clip[];
   selectedClipId: string | null;
+  captions?: CaptionSegment[];
 }
 
-const Timeline: React.FC<TimelineProps> = ({ duration, currentTime, onSeek, clips, selectedClipId }) => {
+const Timeline: React.FC<TimelineProps> = ({ duration, currentTime, onSeek, clips, selectedClipId, captions = [] }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -119,10 +120,27 @@ const Timeline: React.FC<TimelineProps> = ({ duration, currentTime, onSeek, clip
           </div>
 
            {/* Caption Track */}
-           <div className="absolute top-28 left-0 right-0 h-6 bg-yellow-900/20 rounded mx-1 mt-2 border border-yellow-900/30">
-               <div className="h-full w-full flex items-center px-2">
-                 <span className="text-[10px] text-yellow-500 font-mono">Captions (Auto-Generated)</span>
-               </div>
+           <div className="absolute top-28 left-0 right-0 h-6 bg-yellow-900/20 rounded mx-1 mt-2 border border-yellow-900/30 overflow-hidden">
+               {captions.length === 0 ? (
+                 <div className="h-full w-full flex items-center px-2">
+                   <span className="text-[10px] text-yellow-500 font-mono opacity-50">No Captions Generated</span>
+                 </div>
+               ) : (
+                 <>
+                   {captions.map((cap) => {
+                      const left = (cap.startTime / duration) * 100;
+                      const width = ((cap.endTime - cap.startTime) / duration) * 100;
+                      return (
+                        <div 
+                          key={cap.id}
+                          className="absolute top-1 bottom-1 bg-yellow-500/40 rounded-sm border border-yellow-500/60"
+                          style={{ left: `${left}%`, width: `${width}%` }}
+                          title={cap.text}
+                        />
+                      );
+                   })}
+                 </>
+               )}
            </div>
 
           {/* Playhead */}

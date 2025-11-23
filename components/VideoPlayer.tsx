@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { AspectRatio, CaptionStyle } from '../types';
+import { AspectRatio, CaptionStyle, CaptionSegment } from '../types';
 import { Maximize, Play, Pause, Volume2, VolumeX, Upload } from 'lucide-react';
 import { ASPECT_RATIOS } from '../constants';
 
@@ -17,6 +17,7 @@ interface VideoPlayerProps {
   onUploadClick?: () => void;
   onFileDrop?: (file: File) => void;
   templateId?: string;
+  captions?: CaptionSegment[];
 }
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -31,7 +32,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   onDurationChange,
   onUploadClick,
   onFileDrop,
-  templateId = 'fit'
+  templateId = 'fit',
+  captions = []
 }) => {
   const [isMuted, setIsMuted] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -103,6 +105,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (templateId === 'split') return { height: '50%', top: 0, position: 'absolute' as const };
     return { objectFit: 'contain' as const };
   };
+
+  // Find active caption
+  const activeCaption = captions.find(c => currentTime >= c.startTime && currentTime < c.endTime);
 
   return (
     <div className="relative flex-1 bg-black/40 flex items-center justify-center overflow-hidden p-8" id="video-workspace">
@@ -180,12 +185,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               </div>
             )}
 
-            {/* Simulated Captions Overlay */}
+            {/* Captions Overlay */}
             <div className={`absolute left-0 right-0 px-8 text-center pointer-events-none z-20 ${templateId === 'split' ? 'bottom-10' : 'bottom-20'}`}>
-              <p className={`transition-all duration-300 ${captionStyle.cssClass}`}>
-                {/* In a real app, this would be synced via the caption array and currentTime */}
-                Create viral shorts instantly
-              </p>
+              <div className={`transition-all duration-300 ${captionStyle.cssClass}`}>
+                {activeCaption ? activeCaption.text : ''}
+              </div>
             </div>
 
             {/* Video Controls Overlay (On Hover) */}

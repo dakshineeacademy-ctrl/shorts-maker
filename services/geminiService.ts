@@ -1,13 +1,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { Clip } from '../types';
+import { Clip, AnalyzedFrame, CaptionSegment } from '../types';
 
 // Initialize the API client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-
-export interface AnalyzedFrame {
-  time: number;
-  data: string; // base64
-}
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const generateViralClips = async (
   videoDuration: number, 
@@ -103,24 +98,89 @@ export const generateViralClips = async (
   }
 };
 
-export const generateCaptions = async (text: string): Promise<any[]> => {
-  // In a real app, we would send audio chunks. Here we simulate caption timing generation from text.
-  // This is a placeholder for a real speech-to-text + alignment service.
-  return [];
+export const generateCaptions = async (
+  frames: AnalyzedFrame[],
+  duration: number
+): Promise<CaptionSegment[]> => {
+  if (!process.env.API_KEY) {
+    // Mock captions if no API key
+    return mockCaptions(duration);
+  }
+
+  try {
+    const model = "gemini-2.5-flash";
+    const parts: any[] = [];
+    
+    // Sample frames to reduce payload size for captioning task
+    const sampleFrames = frames.filter((_, i) => i % 2 === 0); 
+    
+    sampleFrames.forEach((frame, index) => {
+      parts.push({
+        inlineData: { mimeType: "image/jpeg", data: frame.data }
+      });
+    });
+
+    parts.push({
+      text: `
+        Analyze these frames from a ${duration.toFixed(1)}s video.
+        Generate a synchronized script/caption set that matches the visual action.
+        
+        Task: Create 4-8 caption segments.
+        Format: JSON Array of objects.
+        
+        Requirements:
+        1. Timestamps must increase and stay within 0 to ${duration}.
+        2. Text should be short (3-8 words), punchy, and engaging (Shorts style).
+        3. Match the likely context of the visuals.
+      `
+    });
+
+    const response = await ai.models.generateContent({
+      model,
+      contents: { parts },
+      config: {
+        systemInstruction: "You are an AI caption generator. You create engaging subtitles for videos based on visual context.",
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              startTime: { type: Type.NUMBER },
+              endTime: { type: Type.NUMBER },
+              text: { type: Type.STRING }
+            },
+            required: ["startTime", "endTime", "text"]
+          }
+        }
+      }
+    });
+
+    const jsonText = response.text || "[]";
+    const rawCaptions = JSON.parse(jsonText);
+
+    return rawCaptions.map((c: any, i: number) => ({
+      id: `cap-${i}`,
+      startTime: c.startTime,
+      endTime: c.endTime,
+      text: c.text
+    }));
+
+  } catch (error) {
+    console.error("Caption Generation Error", error);
+    return mockCaptions(duration);
+  }
 };
 
-// Mock data fallback if API fails or key is missing
+// Mock data fallback
 const mockClips = (duration: number, minDuration: number, maxDuration: number): Clip[] => {
   const clips: Clip[] = [];
   const clipCount = 3;
-  const safeDuration = Math.max(duration, maxDuration * 3); // Ensure we have room for mock
+  const safeDuration = Math.max(duration, maxDuration * 3); 
   const sectionSize = safeDuration / clipCount;
   
   for (let i = 0; i < clipCount; i++) {
-    // Generate a random duration between min and max
     const clipLen = Math.floor(Math.random() * (maxDuration - minDuration + 1)) + minDuration;
-    
-    // Distribute clips across the video timeline
     const startWindow = i * sectionSize;
     const start = Math.min(startWindow + 10, duration - clipLen - 5);
     
@@ -135,4 +195,24 @@ const mockClips = (duration: number, minDuration: number, maxDuration: number): 
     });
   }
   return clips;
+};
+
+const mockCaptions = (duration: number): CaptionSegment[] => {
+  const segments: CaptionSegment[] = [];
+  let currentTime = 0;
+  const count = Math.max(3, Math.floor(duration / 5));
+
+  for(let i=0; i<count; i++) {
+    const segmentDur = 2 + Math.random() * 3;
+    if (currentTime + segmentDur > duration) break;
+    
+    segments.push({
+      id: `mock-cap-${i}`,
+      startTime: currentTime,
+      endTime: currentTime + segmentDur,
+      text: ["Wait for it... 😱", "This is insane!", "You won't believe this", "Best moment ever 🔥", "Check this out!"][i % 5]
+    });
+    currentTime += segmentDur + 0.5;
+  }
+  return segments;
 };
