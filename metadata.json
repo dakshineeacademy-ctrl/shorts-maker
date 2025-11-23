@@ -1,0 +1,5 @@
+{
+  "name": "Shorts Maker",
+  "description": "Transform long-form videos into viral shorts using AI-powered scene detection, auto-cropping, and dynamic captions.",
+  "requestFramePermissions": []
+}
